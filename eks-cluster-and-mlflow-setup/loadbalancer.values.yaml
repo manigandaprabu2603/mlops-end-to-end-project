@@ -1,0 +1,12 @@
+# Public HTTP endpoint for a temporary practice lab; creates a billable NLB.
+# HTTP does not encrypt MLflow credentials or traffic.
+service:
+  type: LoadBalancer
+  port: 5000
+  containerPort: 5000
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: external
+    service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+ingress:
+  enabled: false

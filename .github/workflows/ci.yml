@@ -1,0 +1,70 @@
+name: Train and evaluate
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  train-s3:
+    if: >-
+      vars.AWS_REGION != '' &&
+      vars.DVC_S3_REMOTE != '' &&
+      vars.MLFLOW_TRACKING_URI != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      DVC_S3_REMOTE: ${{ vars.DVC_S3_REMOTE }}
+      MLFLOW_TRACKING_URI: ${{ vars.MLFLOW_TRACKING_URI }}
+      MLFLOW_TRACKING_USERNAME: ${{ secrets.MLFLOW_TRACKING_USERNAME }}
+      MLFLOW_TRACKING_PASSWORD: ${{ secrets.MLFLOW_TRACKING_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: pip
+      - name: Validate remote URL
+        shell: bash
+        run: |
+          [[ "$DVC_S3_REMOTE" == s3://* ]] || { echo 'DVC_S3_REMOTE must be an S3 URL'; exit 1; }
+      - name: Validate AWS secrets
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          [[ -n "$AWS_ACCESS_KEY_ID" && -n "$AWS_SECRET_ACCESS_KEY" ]] || { echo 'Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in GitHub Actions secrets'; exit 1; }
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      - run: python -m pip install -r requirements.txt
+      - name: Pull pinned dataset from S3
+        shell: bash
+        run: |
+          python -m dvc remote add --local -f storage "$DVC_S3_REMOTE"
+          python -m dvc pull data/churn.csv.dvc -r storage
+      - name: Validate tracking endpoint and authentication
+        run: |
+          python - <<'PY'
+          import os
+          from urllib.parse import urlparse
+          from mlflow import MlflowClient
+          uri = urlparse(os.environ["MLFLOW_TRACKING_URI"])
+          if not uri.hostname or uri.username or uri.password:
+              raise ValueError("Configure an MLflow URL without embedded credentials")
+          if uri.scheme not in {"http", "https"}:
+              raise ValueError("MLFLOW_TRACKING_URI must be an HTTP or HTTPS URL")
+          if not os.environ.get("MLFLOW_TRACKING_USERNAME") or not os.environ.get("MLFLOW_TRACKING_PASSWORD"):
+              raise ValueError("Set the MLflow username and password GitHub secrets")
+          MlflowClient().search_experiments(max_results=1)
+          print("Authenticated MLflow API connection verified")
+          PY
+      - name: Train model
+        run: python -m src.train
+      - name: Evaluate model on held-out test data
+        run: python -m src.evaluate

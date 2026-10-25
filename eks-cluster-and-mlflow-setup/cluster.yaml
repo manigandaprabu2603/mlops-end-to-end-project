@@ -1,0 +1,30 @@
+# Personal lab: one on-demand worker, public-subnet egress, no NAT gateway.
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+metadata:
+  name: mlops-practice
+  region: ap-south-1
+  version: '1.35'
+availabilityZones: [ap-south-1a, ap-south-1b]
+iam:
+  withOIDC: true
+vpc:
+  clusterEndpoints:
+    publicAccess: true
+    privateAccess: true
+  # Replace YOUR_PUBLIC_IP with your workstation's public IPv4 address.
+  publicAccessCIDRs: ['YOUR_PUBLIC_IP/32']
+  nat:
+    gateway: Disable
+managedNodeGroups:
+  - name: general
+    instanceType: t3.medium
+    desiredCapacity: 1
+    minSize: 0
+    maxSize: 1
+    availabilityZones: [ap-south-1a]
+    privateNetworking: false
+    volumeSize: 20
+    volumeType: gp3
+    ssh:
+      allow: false

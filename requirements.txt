@@ -1,0 +1,7 @@
+dvc[s3]==3.59.1
+pathspec==0.12.1
+mlflow==3.4.0
+scikit-learn==1.6.1
+pandas==2.2.3
+PyYAML==6.0.2
+tzdata==2025.2

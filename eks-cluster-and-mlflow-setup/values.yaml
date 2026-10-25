@@ -1,0 +1,63 @@
+# Pinned chart: community-charts/mlflow 1.6.3; MLflow 3.4.0.
+# Administrator credentials come from the existing mlflow-auth Secret.
+fullnameOverride: mlflow
+replicaCount: 1
+strategy:
+  type: Recreate
+  rollingUpdate: null
+image:
+  repository: burakince/mlflow
+  tag: 3.4.0
+serviceAccount:
+  create: true
+  name: mlflow
+service:
+  type: ClusterIP
+  port: 5000
+  containerPort: 5000
+backendStore:
+  defaultSqlitePath: /mlflow/data/mlflow.db
+  databaseMigration: false
+  databaseConnectionCheck: false
+  postgres:
+    enabled: false
+postgresql:
+  enabled: false
+mysql:
+  enabled: false
+artifactRoot:
+  proxiedArtifactStorage: true
+  defaultArtifactsDestination: /mlflow/data/artifacts
+  s3:
+    enabled: false
+autoscaling:
+  enabled: false
+auth:
+  enabled: true
+  defaultPermission: NO_PERMISSIONS
+  existingAdminSecret:
+    name: mlflow-auth
+    usernameKey: admin-user
+    passwordKey: admin-password
+  sqliteFullPath: /mlflow/data/
+  sqliteFile: basic_auth.db
+extraArgs:
+  workers: '1'
+podSecurityContext:
+  fsGroup: 1001
+extraVolumes:
+- name: mlflow-data
+  persistentVolumeClaim:
+    claimName: mlflow-data
+extraVolumeMounts:
+- name: mlflow-data
+  mountPath: /mlflow/data
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 1Gi
+ingress:
+  enabled: false
