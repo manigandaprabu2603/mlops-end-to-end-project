@@ -74,6 +74,7 @@ def main():
         mlflow.log_params(settings)
         mlflow.set_tags({
             "release_id": release_id,
+            "evaluation_status": "pending",
             "dataset": "synthetic-churn",
             "purpose": "learning",
             "dvc.remote.url": remote_url,
@@ -91,6 +92,7 @@ def main():
             input_example=X_train.head(3),
             pip_requirements=["mlflow==3.4.0", "scikit-learn==1.6.1", "pandas==2.2.3"],
         )
+        mlflow.set_tag("model_uri", logged_model.model_uri)
 
         # 5. Pass the test rows and MLflow references to the next CI steps.
         # The model itself is stored in MLflow, without a second local pickle.

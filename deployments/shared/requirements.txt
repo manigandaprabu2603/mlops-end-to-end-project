@@ -1,0 +1,2 @@
+# CD selects and downloads artifacts from the MLflow 3.4.0 server; it does not load models.
+mlflow==3.4.0

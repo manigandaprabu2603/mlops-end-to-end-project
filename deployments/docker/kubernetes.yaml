@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: churn-docker
+  namespace: inference-docker
+  annotations:
+    mlops/release-id: "__MODEL_LABEL__"
+    mlops/model-uri: "__MODEL_URI__"
+    mlops/run-id: "__MODEL_RUN_ID__"
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: churn-docker
+  template:
+    metadata:
+      labels:
+        app: churn-docker
+      annotations:
+        mlops/model-uri: "__MODEL_URI__"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+      containers:
+        - name: model
+          image: "__MODEL_IMAGE__"
+          ports:
+            - containerPort: 8080
+              name: http
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          startupProbe:
+            httpGet:
+              path: /ping
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: churn-docker
+  namespace: inference-docker
+spec:
+  type: ClusterIP
+  selector:
+    app: churn-docker
+  ports:
+    - port: 80
+      targetPort: http

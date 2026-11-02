@@ -18,3 +18,5 @@ mlartifacts/
 /eks-cluster-and-mlflow-setup/*.local.json
 
 /.github/iam/*.local.json
+
+/model-for-kserve/

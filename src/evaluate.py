@@ -39,6 +39,7 @@ def main():
     with mlflow.start_run(run_id=run["run_id"]):
         mlflow.log_metrics(metrics)
         mlflow.log_metric("decision_threshold", threshold)
+        mlflow.set_tag("evaluation_status", "completed")
     print(json.dumps(metrics, indent=2))
 
 

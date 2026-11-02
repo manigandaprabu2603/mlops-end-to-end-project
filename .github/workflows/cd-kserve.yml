@@ -1,0 +1,94 @@
+name: CD - KServe model to EKS
+on:
+  workflow_dispatch:
+    inputs:
+      model_label:
+        description: Model label in MLflow, for example 20261102-3
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: cd-kserve
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: kserve-serving
+    timeout-minutes: 30
+    env:
+      MODEL_LABEL: ${{ inputs.model_label }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
+      KUBECTL_VERSION: ${{ vars.KUBECTL_VERSION }}
+      KSERVE_MODEL_S3_PREFIX: ${{ vars.KSERVE_MODEL_S3_PREFIX }}
+      KSERVE_S3_ROLE_ARN: ${{ vars.KSERVE_S3_ROLE_ARN }}
+      MLFLOW_TRACKING_URI: ${{ vars.MLFLOW_TRACKING_URI }}
+      MLFLOW_TRACKING_USERNAME: ${{ secrets.MLFLOW_TRACKING_USERNAME }}
+      MLFLOW_TRACKING_PASSWORD: ${{ secrets.MLFLOW_TRACKING_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: pip
+          cache-dependency-path: deployments/shared/requirements.txt
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      - run: python -m pip install -r deployments/shared/requirements.txt
+      - name: Select newest evaluated model with this label
+        id: model
+        run: python deployments/shared/select_model.py --label "$MODEL_LABEL"
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: ${{ env.KUBECTL_VERSION }}
+      - name: Connect to EKS and check the serving runtime
+        run: |
+          aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION"
+          kubectl auth can-i create inferenceservices.serving.kserve.io -n inference-kserve
+          kubectl get clusterservingruntime kserve-mlserver
+      - name: Download selected model from MLflow
+        env:
+          MODEL_URI: ${{ steps.model.outputs.model_uri }}
+        run: python deployments/shared/download_model.py --model-uri "$MODEL_URI" --output model-for-kserve
+      - name: Upload complete model folder to S3
+        run: |
+          # Each CD execution gets its own path so older deployments keep their files.
+          MODEL_STORAGE_URI="${KSERVE_MODEL_S3_PREFIX%/}/${MODEL_LABEL}/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/"
+          aws s3 cp model-for-kserve/ "$MODEL_STORAGE_URI" --recursive --only-show-errors
+          echo "MODEL_STORAGE_URI=$MODEL_STORAGE_URI" >> "$GITHUB_ENV"
+      - name: Fill Kubernetes manifest values
+        uses: qetza/replacetokens-action@e693b63d0fac410b1ae61d82cbc540c12f205556 # v1
+        with:
+          sources: deployments/kserve/inferenceservice.yaml
+          escape: json
+          token-pattern: doubleunderscores
+          if-no-files-found: error
+          missing-var-log: error
+          no-telemetry: true
+          variables: |
+            {
+              "MODEL_LABEL": ${{ toJSON(inputs.model_label) }},
+              "MODEL_URI": ${{ toJSON(steps.model.outputs.model_uri) }},
+              "MODEL_RUN_ID": ${{ toJSON(steps.model.outputs.run_id) }},
+              "MODEL_STORAGE_URI": ${{ toJSON(env.MODEL_STORAGE_URI) }},
+              "KSERVE_S3_ROLE_ARN": ${{ toJSON(vars.KSERVE_S3_ROLE_ARN) }},
+              "AWS_REGION": ${{ toJSON(vars.AWS_REGION) }}
+            }
+      - name: Deploy KServe model
+        run: |
+          kubectl apply -f deployments/kserve/inferenceservice.yaml
+          # Wait until KServe has reconciled this new S3 path into its Deployment.
+          for check in {1..60}; do
+            CURRENT=$(kubectl get deployment churn-kserve-predictor -n inference-kserve -o jsonpath='{.spec.template.metadata.annotations.internal\.serving\.kserve\.io/storage-initializer-sourceuri}' 2>/dev/null || true)
+            [[ "$CURRENT" == "$MODEL_STORAGE_URI" ]] && break
+            sleep 5
+          done
+          [[ "$CURRENT" == "$MODEL_STORAGE_URI" ]] || { echo 'KServe did not reconcile the new model path'; exit 1; }
+          kubectl rollout status deployment/churn-kserve-predictor -n inference-kserve --timeout=600s
+          kubectl wait --for=condition=Ready inferenceservice/churn-kserve -n inference-kserve --timeout=300s

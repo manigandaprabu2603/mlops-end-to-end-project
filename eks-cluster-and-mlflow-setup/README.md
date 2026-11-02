@@ -4,7 +4,7 @@ Create EKS, install MLflow with a PVC, and expose its endpoint for CI. Run comma
 
 ## 1. Prerequisites
 
-Install AWS CLI v2, a current `eksctl`, a compatible `kubectl`, Helm 3 and Python 3.10 or 3.11. Activate `.venv` and install the project's requirements. Your AWS identity needs EKS, EC2/VPC, CloudFormation and IAM provisioning permissions, not only S3 permissions.
+Install AWS CLI v2, a current `eksctl`, a compatible `kubectl`, Helm 3 and Python 3.10. Activate `.venv` and install the project's requirements. Your AWS identity needs EKS, EC2/VPC, CloudFormation and IAM provisioning permissions, not only S3 permissions.
 
 ```powershell
 $env:AWS_PROFILE = "churnlab"
@@ -87,7 +87,7 @@ kubectl get deployment aws-load-balancer-controller -n kube-system
 
 ## 7. Create the public LoadBalancer
 
-For this practice lab, expose MLflow through a public NLB on port **5000**. Keep MLflow authentication enabled in `values.yaml` and create the `mlflow-auth` Secret in step 4.
+For this practice lab, expose MLflow through a public NLB on port **5000**. Keep MLflow authentication enabled in `values.yaml` and create the `mlflow-auth` Secret in step 4. HTTP does not encrypt credentials or model traffic; this endpoint is for the practice lab.
 
 ```powershell
 helm upgrade --install mlflow community-charts/mlflow --version 1.6.3 --namespace mlflow -f eks-cluster-and-mlflow-setup/values.yaml -f eks-cluster-and-mlflow-setup/loadbalancer.values.yaml --wait --timeout 10m

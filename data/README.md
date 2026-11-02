@@ -1,6 +1,6 @@
 # Set up S3 data versioning with DVC
 
-Run these commands from the root of your clone in PowerShell. You need Python 3.10 or 3.11, Git, an S3 bucket, and AWS credentials with access to that bucket.
+Run these commands from the root of your clone in PowerShell. You need Python 3.10, Git, an S3 bucket, and AWS credentials with access to that bucket.
 
 ## Dataset and DVC files
 

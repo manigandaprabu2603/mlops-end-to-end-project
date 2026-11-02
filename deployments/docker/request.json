@@ -1,0 +1,6 @@
+{
+  "dataframe_split": {
+    "columns": ["tenure_months", "monthly_charges", "support_calls", "month_to_month"],
+    "data": [[12, 79.5, 2, 1]]
+  }
+}

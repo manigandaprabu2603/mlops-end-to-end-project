@@ -1,0 +1,87 @@
+name: CD - Docker model to EKS
+on:
+  workflow_dispatch:
+    inputs:
+      model_label:
+        description: Model label in MLflow, for example 20261025-3
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: cd-docker
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: docker-serving
+    timeout-minutes: 30
+    env:
+      MODEL_LABEL: ${{ inputs.model_label }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
+      ECR_REPOSITORY: ${{ vars.DOCKER_ECR_REPOSITORY }}
+      KUBECTL_VERSION: ${{ vars.KUBECTL_VERSION }}
+      MLFLOW_TRACKING_URI: ${{ vars.MLFLOW_TRACKING_URI }}
+      MLFLOW_TRACKING_USERNAME: ${{ secrets.MLFLOW_TRACKING_USERNAME }}
+      MLFLOW_TRACKING_PASSWORD: ${{ secrets.MLFLOW_TRACKING_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: pip
+          cache-dependency-path: deployments/shared/requirements.txt
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      - run: python -m pip install -r deployments/shared/requirements.txt
+      - name: Select newest evaluated model with this label
+        id: model
+        run: python deployments/shared/select_model.py --label "$MODEL_LABEL"
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: ${{ env.KUBECTL_VERSION }}
+      - name: Connect to EKS
+        run: |
+          aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION"
+          kubectl auth can-i create deployments -n inference-docker
+      - name: Download selected model
+        env:
+          MODEL_URI: ${{ steps.model.outputs.model_uri }}
+        run: python deployments/shared/download_model.py --model-uri "$MODEL_URI" --output deployments/docker/model
+      - name: Build and push model image
+        env:
+          ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          TAG="${MODEL_LABEL}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          IMAGE="$ECR_REGISTRY/$ECR_REPOSITORY:$TAG"
+          docker build --label "mlops.build=$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" -t "$IMAGE" deployments/docker
+          docker push "$IMAGE"
+          DIGEST=$(aws ecr describe-images --repository-name "$ECR_REPOSITORY" --image-ids imageTag="$TAG" --query 'imageDetails[0].imageDigest' --output text)
+          echo "MODEL_IMAGE=$ECR_REGISTRY/$ECR_REPOSITORY@$DIGEST" >> "$GITHUB_ENV"
+      - name: Fill Kubernetes manifest values
+        uses: qetza/replacetokens-action@e693b63d0fac410b1ae61d82cbc540c12f205556 # v1
+        with:
+          sources: deployments/docker/kubernetes.yaml
+          token-pattern: doubleunderscores
+          if-no-files-found: error
+          missing-var-log: error
+          no-telemetry: true
+          variables: |
+            {
+              "MODEL_LABEL": ${{ toJSON(inputs.model_label) }},
+              "MODEL_IMAGE": ${{ toJSON(env.MODEL_IMAGE) }},
+              "MODEL_URI": ${{ toJSON(steps.model.outputs.model_uri) }},
+              "MODEL_RUN_ID": ${{ toJSON(steps.model.outputs.run_id) }}
+            }
+      - name: Deploy to EKS
+        run: |
+          kubectl apply -f deployments/docker/kubernetes.yaml
+          kubectl rollout status deployment/churn-docker -n inference-docker --timeout=600s

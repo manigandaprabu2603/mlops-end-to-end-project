@@ -1,0 +1,66 @@
+# The installed MLflow-compatible runtime supplies the serving image.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kserve-s3
+  namespace: inference-kserve
+  annotations:
+    eks.amazonaws.com/role-arn: "__KSERVE_S3_ROLE_ARN__"
+    serving.kserve.io/s3-endpoint: "s3.__AWS_REGION__.amazonaws.com"
+    serving.kserve.io/s3-usehttps: "1"
+    serving.kserve.io/s3-region: "__AWS_REGION__"
+    serving.kserve.io/s3-useanoncredential: "false"
+---
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: churn-kserve
+  namespace: inference-kserve
+  labels:
+    modelClass: mlserver_mlflow.MLflowRuntime
+  annotations:
+    serving.kserve.io/deploymentMode: Standard
+    mlops/release-id: "__MODEL_LABEL__"
+    mlops/model-uri: "__MODEL_URI__"
+    mlops/run-id: "__MODEL_RUN_ID__"
+    mlops/storage-uri: "__MODEL_STORAGE_URI__"
+spec:
+  predictor:
+    serviceAccountName: kserve-s3
+    minReplicas: 1
+    maxReplicas: 1
+    model:
+      modelFormat:
+        name: mlflow
+      runtime: kserve-mlserver
+      protocolVersion: v2
+      env:
+        - name: MLSERVER_MODEL_NAME
+          value: churn-kserve
+        - name: MLSERVER_MODEL_URI
+          value: /mnt/models
+        - name: MLSERVER_PARALLEL_WORKERS
+          value: "1"
+      storageUri: "__MODEL_STORAGE_URI__"
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          cpu: "1"
+          memory: 1Gi
+---
+# Private endpoint for port forwarding; no extra AWS load balancer.
+apiVersion: v1
+kind: Service
+metadata:
+  name: churn-kserve-access
+  namespace: inference-kserve
+spec:
+  type: ClusterIP
+  selector:
+    serving.kserve.io/inferenceservice: churn-kserve
+    component: predictor
+  ports:
+    - port: 80
+      targetPort: 8080

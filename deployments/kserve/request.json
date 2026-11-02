@@ -1,0 +1,9 @@
+{
+  "parameters": {"content_type": "pd"},
+  "inputs": [
+    {"name": "tenure_months", "shape": [1, 1], "datatype": "INT64", "data": [12]},
+    {"name": "monthly_charges", "shape": [1, 1], "datatype": "FP64", "data": [79.5]},
+    {"name": "support_calls", "shape": [1, 1], "datatype": "INT64", "data": [2]},
+    {"name": "month_to_month", "shape": [1, 1], "datatype": "INT64", "data": [1]}
+  ]
+}

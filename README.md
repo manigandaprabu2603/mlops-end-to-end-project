@@ -50,3 +50,12 @@ In GitHub **Settings > Secrets and variables > Actions > Secrets**, add reposito
 - `MLFLOW_TRACKING_PASSWORD`: that user's password.
 
 Push your changes to `main`, then open **Actions > Train and evaluate > Run workflow**. CI pulls the dataset with DVC, trains the model, and records its evaluation scores in MLflow. Open experiment `churn-practice` in the MLflow UI to see the results.
+
+## Model deployment (CD)
+
+After running CI with the current dependencies, deploy by entering a model label such as `20261025-3` in either manual CD workflow:
+
+- [Docker to EKS](deployments/docker/README.md): package the selected model into an image and push it to ECR.
+- [KServe on EKS](deployments/kserve/README.md): upload the selected model from MLflow to S3, then serve it using an installed KServe runtime.
+
+Both select the newest successfully evaluated run for that label and use its exact model URI. Follow [the CD setup](deployments/README.md) for variables, permissions and EKS API connectivity.
