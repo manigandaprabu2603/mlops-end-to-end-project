@@ -16,9 +16,11 @@ kubectl wait --for=condition=Available deployment --all -n cert-manager --timeou
 # Install KServe CRDs.
 helm install kserve-crd oci://ghcr.io/kserve/charts/kserve-crd --version v0.16.0 --namespace kserve --create-namespace --wait --timeout 5m
 
-# Install the controller with the prebuilt MLServer 1.7.1 runtime.
-helm install kserve oci://ghcr.io/kserve/charts/kserve --version v0.16.0 --namespace kserve --set kserve.controller.deploymentMode=Standard --set kserve.controller.gateway.disableIngressCreation=true --set-string kserve.servingruntime.mlserver.tag=1.7.1 --wait --timeout 5m
+# Install the controller with the prebuilt MLflow-only runtime.
+helm install kserve oci://ghcr.io/kserve/charts/kserve --version v0.16.0 --namespace kserve --set kserve.controller.deploymentMode=Standard --set kserve.controller.gateway.disableIngressCreation=true --set-string kserve.servingruntime.mlserver.tag=1.7.1-mlflow --wait --timeout 5m
 ```
+
+Use `mlserver:1.7.1-mlflow`, the MLflow-only image. The unsuffixed `1.7.1` image includes other frameworks such as PyTorch and can exhaust the lab node's 20Gi disk while unpacking.
 
 Check the installation:
 
@@ -102,5 +104,7 @@ kubectl port-forward -n inference-kserve service/churn-kserve-access 8082:80
 In another terminal, from the repository root:
 
 ```powershell
-Invoke-RestMethod -Method Post -Uri http://localhost:8082/v2/models/churn-kserve/infer -ContentType application/json -InFile deployments/kserve/request.json
+$response = Invoke-RestMethod -Method Post -Uri http://localhost:8082/v2/models/churn-kserve/infer -ContentType application/json -InFile deployments/kserve/request.json
+$response | ConvertTo-Json -Depth 10
+$response.outputs[0].data
 ```
