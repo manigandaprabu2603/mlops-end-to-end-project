@@ -82,12 +82,7 @@ jobs:
       - name: Deploy KServe model
         run: |
           kubectl apply -f deployments/kserve/inferenceservice.yaml
-          # Wait until KServe has reconciled this new S3 path into its Deployment.
-          for check in {1..60}; do
-            CURRENT=$(kubectl get deployment churn-kserve-predictor -n inference-kserve -o jsonpath='{.spec.template.metadata.annotations.internal\.serving\.kserve\.io/storage-initializer-sourceuri}' 2>/dev/null || true)
-            [[ "$CURRENT" == "$MODEL_STORAGE_URI" ]] && break
-            sleep 5
-          done
-          [[ "$CURRENT" == "$MODEL_STORAGE_URI" ]] || { echo 'KServe did not reconcile the new model path'; exit 1; }
-          kubectl rollout status deployment/churn-kserve-predictor -n inference-kserve --timeout=600s
-          kubectl wait --for=condition=Ready inferenceservice/churn-kserve -n inference-kserve --timeout=300s
+          # Wait for the predictor to exist and reference this model's S3 path.
+          kubectl wait --for=create deployment/churn-kserve-predictor -n inference-kserve --timeout=120s
+          kubectl wait --for=jsonpath='{.spec.template.metadata.annotations.internal\.serving\.kserve\.io/storage-initializer-sourceuri}'="$MODEL_STORAGE_URI" deployment/churn-kserve-predictor -n inference-kserve --timeout=120s
+          kubectl rollout status deployment/churn-kserve-predictor -n inference-kserve --timeout=300s

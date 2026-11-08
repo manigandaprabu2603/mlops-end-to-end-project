@@ -6,7 +6,6 @@ metadata:
   namespace: inference-kserve
   annotations:
     eks.amazonaws.com/role-arn: "__KSERVE_S3_ROLE_ARN__"
-    serving.kserve.io/s3-endpoint: "s3.__AWS_REGION__.amazonaws.com"
     serving.kserve.io/s3-usehttps: "1"
     serving.kserve.io/s3-region: "__AWS_REGION__"
     serving.kserve.io/s3-useanoncredential: "false"

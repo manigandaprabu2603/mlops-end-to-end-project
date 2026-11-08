@@ -69,7 +69,7 @@ Use the actual prefix if yours differs. The cluster's IAM OIDC provider must be 
 eksctl create iamserviceaccount --cluster mlops-practice --region ap-south-1 --namespace inference-kserve --name kserve-s3 --role-name KServeModelReadRole --role-only --attach-policy-arn arn:aws:iam::YOUR_ACCOUNT_ID:policy/KServeModelRead --approve
 ```
 
-`--role-only` creates the IAM role. The CD manifest creates the Kubernetes ServiceAccount and references the role through `KSERVE_S3_ROLE_ARN`. Skip role creation if a suitable role already exists. Its trust must allow `system:serviceaccount:inference-kserve:kserve-s3` in your cluster.
+`--role-only` creates the IAM role. The CD manifest creates the Kubernetes ServiceAccount and references the role through `KSERVE_S3_ROLE_ARN`.
 
 ## 4. Configure GitHub and deploy
 
@@ -84,7 +84,7 @@ The CD identity needs namespace permissions for InferenceServices and ServiceAcc
 
 In GitHub, choose **Actions -> CD - KServe model to EKS -> Run workflow**, select `main`, and enter the model label. CD resolves its model URI once, downloads the model, uploads the folder to S3 and replaces the placeholders in `inferenceservice.yaml` before applying it.
 
-The workflow waits until the predictor Deployment references the new S3 path, then checks rollout and readiness. Evaluation must have completed before CD selects the model.
+The workflow uses `kubectl wait` for the predictor Deployment and its new S3 path, then waits for its pods to become available with `kubectl rollout status`.
 
 | File | Purpose |
 | --- | --- |
