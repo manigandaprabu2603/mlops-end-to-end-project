@@ -86,11 +86,15 @@ def main():
         mlflow.log_artifact("data/churn.csv.dvc", artifact_path="data-version")
         logged_model = mlflow.sklearn.log_model(
             model,
-            name=release_id,
+            artifact_path=release_id,
             # Describe the input/output columns and the packages needed to load it.
             signature=infer_signature(X_train, model.predict(X_train)),
             input_example=X_train.head(3),
-            pip_requirements=["mlflow==3.4.0", "scikit-learn==1.6.1", "pandas==2.2.3"],
+            # Keep the saved model's dependencies aligned with requirements.txt.
+            pip_requirements=[
+                "mlflow==2.19.0", "scikit-learn==1.5.2", "pandas==2.2.3",
+                "numpy==1.26.4", "scipy==1.13.1", "cloudpickle==3.1.0",
+            ],
         )
         mlflow.set_tag("model_uri", logged_model.model_uri)
 

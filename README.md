@@ -59,3 +59,42 @@ After running CI with the current dependencies, deploy by entering a model label
 - [KServe on EKS](deployments/kserve/README.md): upload the selected model from MLflow to S3, then serve it using an installed KServe runtime.
 
 Both select the newest successfully evaluated run for that label and use its exact model URI. Follow [the CD setup](deployments/README.md) for variables, permissions and EKS API connectivity.
+
+## Delete project resources
+
+Stop running CI/CD jobs first. Skip resources you did not create; `--dry-run` creates nothing. Back up any data you want to keep before deleting storage.
+
+1. Connect to the project cluster:
+
+   ```powershell
+   $env:AWS_PROFILE = "churnlab"
+   aws sts get-caller-identity
+   aws eks update-kubeconfig --name mlops-practice --region ap-south-1
+   ```
+
+2. Record the EBS volume ID for the `mlflow-data` claim, then remove the public MLflow Service:
+
+   ```powershell
+   kubectl get pv -o custom-columns=NAME:.metadata.name,CLAIM:.spec.claimRef.name,VOLUME_ID:.spec.csi.volumeHandle
+   kubectl delete service mlflow -n mlflow --ignore-not-found
+   ```
+
+   Keep the Load Balancer Controller running until the NLB disappears from **EC2 > Load Balancers**. Remove any other LoadBalancer Services or Ingresses you added before deleting the cluster. [AWS deletion guide](https://docs.aws.amazon.com/eks/latest/userguide/delete-cluster.html)
+
+3. Delete the cluster, nodes and eksctl-created VPC/networking:
+
+   ```powershell
+   eksctl delete cluster --name mlops-practice --region ap-south-1 --wait
+   ```
+
+   Check CloudFormation for failed `eksctl-mlops-practice-*` stacks. If a PodDisruptionBudget blocks deletion, rerun with `--disable-nodegroup-eviction`.
+
+4. Delete any remaining resources dedicated to this project:
+
+   | Resource | Cleanup |
+   | --- | --- |
+   | EBS | Delete the recorded MLflow volume once **Available**, plus unwanted lab snapshots. The volume uses `Retain` and is not deleted with EKS. |
+   | S3 | Remove `dvc-cache/` and `kserve-models/`, including old versions if versioning is enabled. Delete the bucket only if dedicated to this project. |
+   | ECR | Delete `churn-docker` and its images if no longer needed. |
+   | IAM | Remove unused project roles/policies and the deleted cluster's OIDC provider. Use owning CloudFormation stacks where applicable; preserve shared resources and AWS-managed policies. |
+   | Other | Check for leftover load balancers, target groups, Elastic IPs and CloudWatch log groups. |

@@ -1,4 +1,5 @@
-"""Create the username/password Secret used by the Helm chart."""
+"""Create or update the username/password Secret used by the Helm chart."""
+import base64
 import getpass
 import json
 import re
@@ -17,7 +18,11 @@ def build_secret(username, password):
         "kind": "Secret",
         "metadata": {"name": "mlflow-auth", "namespace": "mlflow"},
         "type": "Opaque",
-        "stringData": {"admin-user": username, "admin-password": password},
+        # Server-side apply uses base64-encoded data without a plaintext apply annotation.
+        "data": {
+            "admin-user": base64.b64encode(username.encode()).decode(),
+            "admin-password": base64.b64encode(password.encode()).decode(),
+        },
     }
 
 
@@ -25,8 +30,11 @@ def main():
     username = input("MLflow administrator username: ").strip()
     password = getpass.getpass("MLflow administrator password (16+ characters): ")
     secret = build_secret(username, password)
-    subprocess.run(["kubectl", "create", "-f", "-"], input=json.dumps(secret), text=True, check=True)
-    print("Created mlflow-auth. Credentials were not written to this repository.")
+    subprocess.run(
+        ["kubectl", "apply", "--server-side", "--field-manager=mlops-secret-setup", "--force-conflicts", "-f", "-"],
+        input=json.dumps(secret), text=True, check=True,
+    )
+    print("Created or updated mlflow-auth. Credentials were not written to this repository.")
 
 
 if __name__ == "__main__":

@@ -52,7 +52,7 @@ kubectl get pvc mlflow-data -n mlflow
 
 ## 4. Create credentials and install MLflow
 
-The helper prompts for the initial administrator login and creates a Kubernetes Secret without saving passwords to the repository:
+The helper prompts for the initial administrator login and creates or updates the Kubernetes Secret without saving passwords to the repository. Use a password of at least 16 characters:
 
 ```powershell
 python eks-cluster-and-mlflow-setup/create_secret.py
