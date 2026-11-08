@@ -15,7 +15,6 @@ jobs:
   deploy:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    environment: kserve-serving
     timeout-minutes: 30
     env:
       MODEL_LABEL: ${{ inputs.model_label }}

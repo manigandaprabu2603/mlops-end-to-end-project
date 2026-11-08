@@ -20,11 +20,9 @@ Both workflows are manual and run from `main` on GitHub-hosted runners.
 
 - Complete [MLflow hosting](../eks-cluster-and-mlflow-setup/README.md) and training CI first.
 - Reuse the existing AWS and MLflow repository secrets listed in [the main README](../README.md#github-actions-ci).
-- The IAM user used by Docker CD needs ECR image push/read permissions. KServe CD needs S3 upload permissions for its serving prefix. Both need `eks:DescribeCluster`, an EKS access entry (or existing cluster access) and Kubernetes permissions to manage the resources in the chosen namespace. DVC read permissions alone are insufficient. Node IAM roles need ECR image pull access for Docker serving; the KServe service account needs S3 read access. See [EKS access entries](https://docs.aws.amazon.com/eks/latest/userguide/access-entries.html).
+- The IAM user used by Docker CD needs ECR image push/read permissions. KServe CD needs S3 upload permissions for its serving prefix. Both need `eks:DescribeCluster`, an EKS access entry (or existing cluster access) and Kubernetes permissions to manage the resources in the chosen namespace. Node IAM roles need ECR image pull access for Docker serving; the KServe service account needs S3 read access. See [EKS access entries](https://docs.aws.amazon.com/eks/latest/userguide/access-entries.html).
 - **GitHub-hosted runners must reach the EKS Kubernetes API.** The cluster template allows only your workstation IP. Configure runner network access before CD; AWS credentials do not bypass that restriction. Standard hosted runners have changing outbound IPs, so your workstation `/32` will not work for them. Choose an appropriate network access arrangement for your cluster before running deployment. MLflow's public NLB exposes only MLflow, not the Kubernetes API.
 - KServe additionally needs its controller, CRDs, a compatible installed runtime and S3 service-account access. See its separate guide below.
-
-These files do not change your EKS API access rules, install KServe, or create AWS resources automatically.
 
 ## One-time setup
 
@@ -52,7 +50,7 @@ Keep the existing MLflow variables/secrets and add these GitHub repository varia
 
 For KServe, add the S3 settings in [its setup guide](kserve/README.md#4-configure-github-and-deploy).
 
-Set up GitHub environments `docker-serving` and `kserve-serving`; restrict deployment to `main` and optionally require approval. The workflows use IAM user secrets, as training does. GitHub authentication needs no additional OIDC role. KServe uses a separate pod IAM role for S3 reads, configured in its guide.
+The workflows use IAM user secrets, as training does. GitHub authentication needs no additional OIDC role. KServe uses a separate pod IAM role for S3 reads, configured in its guide.
 
 ## Access and cost
 
